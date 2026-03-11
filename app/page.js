@@ -44,7 +44,7 @@ export default function HomePage() {
         <div className="header-inner">
           <div className="brand">
             <b>Real Ecommerce Profit</b>
-            <span>{lang === "it" ? "Unit economics, senza fuffa" : "Unit economics, no fluff"}</span>
+            <span>{lang === "it" ? "Calcola margini e ROAS di pareggio" : "Unit economics, no fluff"}</span>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
