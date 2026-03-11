@@ -31,9 +31,31 @@ export default function SuccessPage() {
   if (status === "verifying") {
     return (
       <div style={{ paddingTop: 80 }}>
-        <h1 className="h1">Processing payment...</h1>
-        <p className="sub">Please wait while we confirm your transaction.</p>
-      </div>
+       <div style={{ paddingTop: 40, paddingBottom: 20 }}>
+  <h1 className="h1" style={{ maxWidth: 900 }}>
+    Know your <span style={{ color: "var(--accent)" }}>real profit</span> per order — 
+    before scaling ads.
+  </h1>
+
+  <p className="sub" style={{ fontSize: 18, marginTop: 12 }}>
+    A fast unit economics simulator for Shopify & DTC brands.  
+    Include COGS, shipping, fees, returns and ad spend.  
+    Instantly see your break-even ROAS and CPA.
+  </p>
+
+  <div style={{ marginTop: 20, display: "flex", gap: 12, flexWrap: "wrap" }}>
+    <a href="#calculator" className="btn btnPrimary">
+      Calculate my profit
+    </a>
+    <a href="/pro" className="btn">
+      Unlock Pro — $9 one-time
+    </a>
+  </div>
+
+  <div className="small" style={{ marginTop: 14 }}>
+    Free • No signup • Built for founders & media buyers
+  </div>
+</div>
     );
   }
 
