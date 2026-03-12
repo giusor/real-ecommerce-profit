@@ -1,231 +1,525 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { clamp, compute, formatMoney, formatPct, insight, parseNum } from "@/lib/calc";
+import { compute } from "@/lib/calc";
+
+const LS_KEY = "pro_unlocked";
+
+function isNumLike(s) {
+  if (s === "" || s === null || s === undefined) return false;
+  const v = String(s).trim().replace(",", ".");
+  return v !== "" && !Number.isNaN(Number(v));
+}
+
+function toNumber(s) {
+  if (!isNumLike(s)) return 0;
+  return Number(String(s).trim().replace(",", "."));
+}
+
+function fmtMoney(n, symbol) {
+  const v = Number(n || 0);
+  const abs = Math.abs(v);
+  const sign = v < 0 ? "-" : "";
+  // format: 1,234.56 in EN / 1.234,56 in IT handled by locale outside if needed
+  // We keep simple formatting + replace later if IT.
+  const s = abs.toFixed(2);
+  const parts = s.split(".");
+  const int = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const dec = parts[1];
+  return `${sign}${symbol}${int}.${dec}`;
+}
+
+function fmtPct(n) {
+  const v = Number(n || 0);
+  return `${(v * 100).toFixed(1)}%`;
+}
+
+function normalizeMoneyStringForLang(str, lang) {
+  // Convert "$1,234.56" -> "€1.234,56" style later; symbol set elsewhere.
+  if (lang !== "it") return str;
+  // swap thousand/decimal separators (simple approach)
+  // 1,234.56 => 1.234,56
+  return str.replace(/(\d),(?=\d{3}\b)/g, "$1.").replace(/\.(\d{2})\b/g, ",$1");
+}
 
 function defaultState(lang) {
-  const isIT = lang === "it";
+  // Defaults shown as strings (user-friendly)
+  // IT uses comma; EN uses dot
+  const dot = lang === "it" ? "," : ".";
   return {
-    price: isIT ? "49,00" : "49.00",
-    cogs: isIT ? "18,00" : "18.00",
-    shipCost: isIT ? "6,50" : "6.50",
-    packCost: isIT ? "0,80" : "0.80",
-    shipCharged: isIT ? "4,90" : "4.90",
-    payFeePct: isIT ? "2,9" : "2.9",
-    payFeeFixed: isIT ? "0,30" : "0.30",
-    platformFeePct: "0.0",
-    adMode: "cpa",
-    cpa: isIT ? "12,00" : "12.00",
-    roas: isIT ? "2,5" : "2.5",
-    returnRate: "8"
+    price: `49${dot}00`,
+    cogs: `18${dot}00`,
+    shipCost: `6${dot}50`,
+    shipCharged: `4${dot}90`,
+    packaging: `0${dot}80`,
+    payFeePct: `2${dot}9`,
+    payFeeFixed: `0${dot}30`,
+    platformFeePct: `0${dot}0`,
+    returnsPct: `8`,
+    adsMode: "roas", // "roas" | "cpa"
+    roas: `2${dot}5`,
+    cpa: `20${dot}00`,
+    // Pro sims
+    adUpPct: 0,
+    discountPct: 0,
+    returnsUp: 0,
   };
 }
 
 export default function Calculator({ lang, isPro, setWantsPro }) {
-  const currencySymbol = lang === "it" ? "€" : "$";
+  const t = useMemo(() => {
+    const it = {
+      input: "Input",
+      results: "Risultati",
+      simulation: "Simulazione",
+      lockedNote: "Disponibile in Pro: confronto scenari + export PDF senza watermark.",
+      unlock: "Sblocca Pro",
+      resetSim: "Reset simulazione",
+      // Friendly labels (no acronyms)
+      sellPrice: "Prezzo di vendita",
+      sellPriceHelp: "Prezzo pagato dal cliente (IVA inclusa se la usi così).",
+      productCost: "Costo prodotto per ordine",
+      productCostHelp: "Costo merce (quanto ti costa produrre/acquistare l’ordine).",
+      shippingYou: "Spedizione (costo tuo)",
+      shippingYouHelp: "Quanto paghi tu al corriere per spedire.",
+      shippingCustomer: "Spedizione pagata dal cliente",
+      shippingCustomerHelp: "Quanto incassi dal cliente per la spedizione (0 se gratuita).",
+      packaging: "Packaging",
+      packagingHelp: "Scatola, materiale imballo, etichette.",
+      payFeesPct: "Commissione pagamento (%)",
+      payFeesPctHelp: "Es. Stripe/PayPal percentuale.",
+      payFeesFixed: "Commissione pagamento fissa",
+      payFeesFixedHelp: "Es. 0,30€ per transazione.",
+      platformFeePct: "Commissione piattaforma (%)",
+      platformFeePctHelp: "Es. fee marketplace o app/checkout (se applicabile).",
+      returnsPct: "Resi (%)",
+      returnsPctHelp: "Quota ordini che rimborsi (in media).",
 
-  const [s, setS] = useState(() => defaultState(lang));
+      adsTitle: "Pubblicità",
+      adsModeLabel: "Come misuri la pubblicità?",
+      adsModeROAS: "Rendimento (ricavi / spesa)",
+      adsModeCPA: "Costo per acquisto",
+      roasLabel: "Rendimento pubblicità (x)",
+      roasHelp: "Esempio: 2,5 significa 2,5€ di ricavi per 1€ speso.",
+      cpaLabel: "Costo pubblicità per ordine",
+      cpaHelp: "Quanto ti costa ottenere un ordine (in media).",
 
-  // Simulation sliders (applied on top)
-  const [adUpPct, setAdUpPct] = useState(0);        // 0..30
-  const [discountPct, setDiscountPct] = useState(0); // 0..30
-  const [returnsUp, setReturnsUp] = useState(0);     // 0..10 (pp)
+      kpiProfit: "Profitto netto / ordine",
+      kpiMargin: "Margine netto",
+      kpiBreakEvenAds: "Ads a pareggio per ordine",
+      kpiBreakEvenROAS: "Rendimento ads di pareggio",
 
-  useEffect(() => {
-    setS(defaultState(lang));
-    setAdUpPct(0); setDiscountPct(0); setReturnsUp(0);
-  }, [lang]);
+      insightTitle: "Interpretazione",
+      // Insight buckets (user-friendly)
+      insightGood:
+        "Ottimo: hai margine. Puoi reinvestire in ads o sconti senza andare in perdita.",
+      insightOk:
+        "Sei in equilibrio: piccoli cambiamenti (ads, resi, sconti) possono spostare il profitto.",
+      insightBad:
+        "Sei in perdita: prima di scalare, rivedi prezzo, costi, resi o spesa ads.",
 
-  const inputs = useMemo(() => {
-    const base = {
-      price: parseNum(s.price),
-      cogs: parseNum(s.cogs),
-      shipCost: parseNum(s.shipCost),
-      packCost: parseNum(s.packCost),
-      shipCharged: parseNum(s.shipCharged),
-      payFeePct: parseNum(s.payFeePct) / 100,
-      payFeeFixed: parseNum(s.payFeeFixed),
-      platformFeePct: parseNum(s.platformFeePct) / 100,
-      adMode: s.adMode,
-      cpa: parseNum(s.cpa),
-      roas: parseNum(s.roas),
-      returnRate: clamp(parseNum(s.returnRate) / 100, 0, 1)
+      statusLoss: "In perdita",
+      statusOk: "In equilibrio",
+      statusProfit: "Profittevole",
+
+      simAdsUp: "Ads più care",
+      simDiscount: "Sconto",
+      simReturnsUp: "Resi in aumento",
+      simHint:
+        "Muovi i cursori per vedere l’impatto sui risultati. In Pro puoi confrontare scenari A vs B.",
+
+      disclaimer: "Nota: stime operative. Non è consulenza fiscale/finanziaria.",
+
+      currencySymbol: "€",
     };
 
-    // Apply simulation
-    const priceAfterDiscount = base.price * (1 - discountPct / 100);
-    const returnRateAfter = clamp(base.returnRate + (returnsUp / 100), 0, 1);
+    const en = {
+      input: "Inputs",
+      results: "Results",
+      simulation: "Simulation",
+      lockedNote: "Available in Pro: scenario comparison + clean PDF export (no watermark).",
+      unlock: "Unlock Pro",
+      resetSim: "Reset simulation",
 
-    let cpaAfter = base.cpa;
-    let roasAfter = base.roas;
+      sellPrice: "Selling price",
+      sellPriceHelp: "What the customer pays (include taxes if that’s how you track it).",
+      productCost: "Product cost per order",
+      productCostHelp: "Your product cost (COGS) per order.",
+      shippingYou: "Shipping (your cost)",
+      shippingYouHelp: "What you pay the carrier.",
+      shippingCustomer: "Shipping charged to customer",
+      shippingCustomerHelp: "What you collect from the customer (0 if free shipping).",
+      packaging: "Packaging",
+      packagingHelp: "Box, labels, materials.",
+      payFeesPct: "Payment fee (%)",
+      payFeesPctHelp: "e.g., Stripe/PayPal percentage fee.",
+      payFeesFixed: "Payment fixed fee",
+      payFeesFixedHelp: "e.g., $0.30 per transaction.",
+      platformFeePct: "Platform fee (%)",
+      platformFeePctHelp: "Marketplace/app/platform fee if applicable.",
+      returnsPct: "Returns (%)",
+      returnsPctHelp: "Average share of orders refunded.",
 
-    if (base.adMode === "cpa") {
-      cpaAfter = base.cpa * (1 + adUpPct / 100);
+      adsTitle: "Advertising",
+      adsModeLabel: "How do you track ads?",
+      adsModeROAS: "Return (revenue / spend)",
+      adsModeCPA: "Cost per purchase",
+      roasLabel: "Ad return (x)",
+      roasHelp: "Example: 2.5 means $2.5 revenue per $1 spent.",
+      cpaLabel: "Ad cost per order",
+      cpaHelp: "Average cost to get one order.",
+
+      kpiProfit: "Net profit / order",
+      kpiMargin: "Net margin",
+      kpiBreakEvenAds: "Break-even ad spend / order",
+      kpiBreakEvenROAS: "Break-even ad return",
+
+      insightTitle: "Insight",
+      insightGood:
+        "Great: you have margin. You can reinvest in ads or discounts without going negative.",
+      insightOk:
+        "Tight: small changes (ads, returns, discounts) can flip profitability.",
+      insightBad:
+        "You’re losing money: before scaling, revisit price, costs, returns, or ad spend.",
+
+      statusLoss: "Losing money",
+      statusOk: "Tight",
+      statusProfit: "Profitable",
+
+      simAdsUp: "Higher ad costs",
+      simDiscount: "Discount",
+      simReturnsUp: "More returns",
+      simHint:
+        "Move sliders to see the impact. In Pro you can compare Scenario A vs B.",
+
+      disclaimer: "Disclaimer: estimates only. Not financial/tax advice.",
+      currencySymbol: "$",
+    };
+
+    return lang === "it" ? it : en;
+  }, [lang]);
+
+  const [state, setState] = useState(() => defaultState(lang));
+
+  // If language changes, update defaults only if user hasn't edited fields yet
+  useEffect(() => {
+    setState((prev) => {
+      // naive: keep user values, only adjust formatting for decimals in the two main fields if empty
+      // We'll keep it simple and not overwrite user.
+      return prev;
+    });
+  }, [lang]);
+
+  const currencySymbol = t.currencySymbol;
+
+  // Build inputs for compute()
+  const baseInputs = useMemo(() => {
+    const price = toNumber(state.price);
+    const cogs = toNumber(state.cogs);
+    const shipCost = toNumber(state.shipCost);
+    const shipCharged = toNumber(state.shipCharged);
+    const packaging = toNumber(state.packaging);
+    const payFeePct = toNumber(state.payFeePct) / 100;
+    const payFeeFixed = toNumber(state.payFeeFixed);
+    const platformFeePct = toNumber(state.platformFeePct) / 100;
+    const returnsPct = toNumber(state.returnsPct) / 100;
+
+    // Ads
+    let adCost = 0;
+    if (state.adsMode === "roas") {
+      const roas = Math.max(0.0001, toNumber(state.roas));
+      // adCost = revenue/roas; revenue here is selling price + shipping charged
+      const revenue = price + shipCharged;
+      adCost = revenue / roas;
     } else {
-      // If ad cost increases, ROAS decreases (roughly inverse)
-      roasAfter = base.roas > 0 ? base.roas / (1 + adUpPct / 100) : 0;
+      adCost = Math.max(0, toNumber(state.cpa));
     }
 
     return {
-      ...base,
-      price: priceAfterDiscount,
-      cpa: cpaAfter,
-      roas: roasAfter,
-      returnRate: returnRateAfter
+      price,
+      cogs,
+      shipCost,
+      shipCharged,
+      packaging,
+      payFeePct,
+      payFeeFixed,
+      platformFeePct,
+      returnsPct,
+      adCost,
     };
-  }, [s, discountPct, returnsUp, adUpPct]);
+  }, [state]);
 
-  const out = useMemo(() => compute(inputs), [inputs]);
-  const insightText = useMemo(() => insight(out, currencySymbol), [out, currencySymbol]);
+  // Apply simulations (adUpPct, discountPct, returnsUp)
+  const simInputs = useMemo(() => {
+    const adUp = state.adUpPct / 100;
+    const discount = state.discountPct / 100;
+    const returnsUp = state.returnsUp / 100;
 
-  const badge = (() => {
-    if (out.health === "healthy") return { text: lang === "it" ? "Solido" : "Healthy", color: "var(--green)" };
-    if (out.health === "tight") return { text: lang === "it" ? "Tirato" : "Tight", color: "var(--yellow)" };
-    return { text: lang === "it" ? "In perdita" : "Losing money", color: "var(--red)" };
-  })();
+    const priceAfterDiscount = baseInputs.price * (1 - discount);
+    const shipCharged = baseInputs.shipCharged; // keep same
+    const adCost = baseInputs.adCost * (1 + adUp);
+    const returnsPct = Math.min(0.99, baseInputs.returnsPct + returnsUp);
+
+    return {
+      ...baseInputs,
+      price: priceAfterDiscount,
+      shipCharged,
+      adCost,
+      returnsPct,
+    };
+  }, [baseInputs, state.adUpPct, state.discountPct, state.returnsUp]);
+
+  const out = useMemo(() => compute(simInputs), [simInputs]);
+
+  const profit = out?.profit ?? 0;
+  const margin = out?.margin ?? 0;
+  const breakEvenCPA = out?.breakEvenCPA ?? 0;
+  const breakEvenROAS = out?.breakEvenROAS ?? 0;
+
+  const status = useMemo(() => {
+    if (profit < 0) return "loss";
+    if (profit >= 0 && profit < 1) return "ok";
+    return "profit";
+  }, [profit]);
+
+  const statusLabel =
+    status === "loss" ? t.statusLoss : status === "ok" ? t.statusOk : t.statusProfit;
+
+  const insightText =
+    status === "profit" ? t.insightGood : status === "ok" ? t.insightOk : t.insightBad;
+
+  function setField(key, val) {
+    setState((prev) => ({ ...prev, [key]: val }));
+  }
+
+  function resetSimulation() {
+    setState((prev) => ({ ...prev, adUpPct: 0, discountPct: 0, returnsUp: 0 }));
+  }
+
+  const money = (n) => normalizeMoneyStringForLang(fmtMoney(n, currencySymbol), lang);
 
   return (
-    <div className="row">
+    <div className="grid2">
+      {/* LEFT: INPUT */}
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>{lang === "it" ? "Input" : "Inputs"}</h3>
+        <div className="cardTitle">{t.input}</div>
 
-        <div className="grid2">
-          <Field label={lang === "it" ? "Prezzo di vendita" : "Selling price"} value={s.price}
-            onChange={(v) => setS({ ...s, price: v })} />
-          <Field label="COGS" value={s.cogs} onChange={(v) => setS({ ...s, cogs: v })} help={lang === "it" ? "Costo prodotto per ordine" : "Product cost per order"} />
+        <div className="fieldGrid">
+          <Field
+            label={t.sellPrice}
+            help={t.sellPriceHelp}
+            value={state.price}
+            onChange={(v) => setField("price", v)}
+          />
+          <Field
+            label={t.productCost}
+            help={t.productCostHelp}
+            value={state.cogs}
+            onChange={(v) => setField("cogs", v)}
+          />
 
-          <Field label={lang === "it" ? "Costo spedizione (tuo)" : "Shipping cost (your cost)"} value={s.shipCost}
-            onChange={(v) => setS({ ...s, shipCost: v })} />
-          <Field label={lang === "it" ? "Costo packaging" : "Packaging cost"} value={s.packCost}
-            onChange={(v) => setS({ ...s, packCost: v })} />
+          <Field
+            label={t.shippingYou}
+            help={t.shippingYouHelp}
+            value={state.shipCost}
+            onChange={(v) => setField("shipCost", v)}
+          />
+          <Field
+            label={t.packaging}
+            help={t.packagingHelp}
+            value={state.packaging}
+            onChange={(v) => setField("packaging", v)}
+          />
 
-          <Field label={lang === "it" ? "Spedizione al cliente" : "Shipping charged to customer"} value={s.shipCharged}
-            onChange={(v) => setS({ ...s, shipCharged: v })} help={lang === "it" ? "0 se spedizione gratuita" : "0 for free shipping"} />
+          <Field
+            label={t.shippingCustomer}
+            help={t.shippingCustomerHelp}
+            value={state.shipCharged}
+            onChange={(v) => setField("shipCharged", v)}
+          />
+          <Field
+            label={t.payFeesPct}
+            help={t.payFeesPctHelp}
+            value={state.payFeePct}
+            onChange={(v) => setField("payFeePct", v)}
+          />
 
-          <Field label={lang === "it" ? "Fee pagamento %" : "Payment fee %"} value={s.payFeePct}
-            onChange={(v) => setS({ ...s, payFeePct: v })} />
+          <Field
+            label={t.payFeesFixed}
+            help={t.payFeesFixedHelp}
+            value={state.payFeeFixed}
+            onChange={(v) => setField("payFeeFixed", v)}
+          />
+          <Field
+            label={t.platformFeePct}
+            help={t.platformFeePctHelp}
+            value={state.platformFeePct}
+            onChange={(v) => setField("platformFeePct", v)}
+          />
 
-          <Field label={lang === "it" ? "Fee fissa pagamento" : "Payment fee fixed"} value={s.payFeeFixed}
-            onChange={(v) => setS({ ...s, payFeeFixed: v })} help={lang === "it" ? "es. 0,30 per transazione" : "e.g. $0.30 per transaction"} />
-
-          <Field label={lang === "it" ? "Fee piattaforma %" : "Platform / app fees %"} value={s.platformFeePct}
-            onChange={(v) => setS({ ...s, platformFeePct: v })} />
-
-          <Field label={lang === "it" ? "Resi %" : "Return rate %"} value={s.returnRate}
-            onChange={(v) => setS({ ...s, returnRate: v })} />
+          <Field
+            label={t.returnsPct}
+            help={t.returnsPctHelp}
+            value={state.returnsPct}
+            onChange={(v) => setField("returnsPct", v)}
+          />
         </div>
 
-        <div className="hr" />
+        <div className="divider" />
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <div>
-            <div className="label">{lang === "it" ? "Ads mode" : "Ads mode"}</div>
-            <div className="toggle">
-              <div className={`pill ${s.adMode === "cpa" ? "pillOn" : ""}`} onClick={() => setS({ ...s, adMode: "cpa" })}>CPA</div>
-              <div className={`pill ${s.adMode === "roas" ? "pillOn" : ""}`} onClick={() => setS({ ...s, adMode: "roas" })}>ROAS</div>
-            </div>
-          </div>
-
-          <div style={{ flex: 1 }}>
-            {s.adMode === "cpa" ? (
-              <Field label={lang === "it" ? "CPA (costo per acquisto)" : "CPA (cost per purchase)"} value={s.cpa}
-                onChange={(v) => setS({ ...s, cpa: v })} />
-            ) : (
-              <Field label={lang === "it" ? "ROAS (x)" : "ROAS (x)"} value={s.roas}
-                onChange={(v) => setS({ ...s, roas: v })} />
-            )}
-          </div>
+        <div className="cardTitle" style={{ marginTop: 4 }}>
+          {t.adsTitle}
+        </div>
+        <div className="muted" style={{ marginTop: 6 }}>
+          {t.adsModeLabel}
         </div>
 
-        <div className="hr" />
-
-        <div className="btnRow">
-          <button className="btn" onClick={() => { setAdUpPct(0); setDiscountPct(0); setReturnsUp(0); }}>
-            {lang === "it" ? "Reset simulazione" : "Reset simulation"}
+        <div className="segmented" style={{ marginTop: 10 }}>
+          <button
+            className={`segBtn ${state.adsMode === "roas" ? "segOn" : ""}`}
+            onClick={() => setField("adsMode", "roas")}
+            type="button"
+          >
+            {t.adsModeROAS}
           </button>
+          <button
+            className={`segBtn ${state.adsMode === "cpa" ? "segOn" : ""}`}
+            onClick={() => setField("adsMode", "cpa")}
+            type="button"
+          >
+            {t.adsModeCPA}
+          </button>
+        </div>
+
+        {state.adsMode === "roas" ? (
+          <Field
+            label={t.roasLabel}
+            help={t.roasHelp}
+            value={state.roas}
+            onChange={(v) => setField("roas", v)}
+          />
+        ) : (
+          <Field
+            label={t.cpaLabel}
+            help={t.cpaHelp}
+            value={state.cpa}
+            onChange={(v) => setField("cpa", v)}
+          />
+        )}
+
+        <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+          <button className="btn" onClick={resetSimulation} type="button">
+            {t.resetSim}
+          </button>
+
           {!isPro && (
-            <button className="btn btnPrimary" onClick={() => setWantsPro(true)}>
-              {lang === "it" ? "Sblocca Pro" : "Unlock Pro"}
+            <button className="btn btnPrimary" onClick={() => setWantsPro(true)} type="button">
+              {t.unlock}
             </button>
           )}
         </div>
 
-        <div className="small">
-          {lang === "it"
-            ? "Nota: stime operative, non consulenza fiscale/finanziaria."
-            : "Note: decision estimates, not financial/tax advice."}
+        <div className="note" style={{ marginTop: 10 }}>
+          {t.disclaimer}
         </div>
       </div>
 
+      {/* RIGHT: RESULTS */}
       <div className="card">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <h3 style={{ marginTop: 0 }}>{lang === "it" ? "Risultati" : "Results"}</h3>
-          <span className="badge">
-            <span className="dot" style={{ background: badge.color }} />
-            {badge.text}
-          </span>
-        </div>
-
-        <div className="kpi">
-          <div className="box">
-            <span>{lang === "it" ? "Profitto netto / ordine" : "Net profit / order"}</span>
-            <b style={{ color: out.profit < 0 ? "var(--red)" : "var(--text)" }}>{formatMoney(out.profit, currencySymbol)}</b>
-          </div>
-          <div className="box">
-            <span>{lang === "it" ? "Margine netto %" : "Net margin %"}</span>
-            <b>{formatPct(out.margin)}</b>
-          </div>
-          <div className="box">
-            <span>{lang === "it" ? "CPA di pareggio" : "Break-even CPA"}</span>
-            <b>{formatMoney(out.breakEvenCPA, currencySymbol)}</b>
-          </div>
-          <div className="box">
-            <span>{lang === "it" ? "ROAS di pareggio" : "Break-even ROAS"}</span>
-            <b>{out.breakEvenROAS === Infinity ? "∞" : `${out.breakEvenROAS.toFixed(2)}x`}</b>
+        <div className="cardTopRow">
+          <div className="cardTitle">{t.results}</div>
+          <div className={`pillTag ${status}`}>
+            <span className="dot" />
+            {statusLabel}
           </div>
         </div>
 
-        <div className="hr" />
+        <div className="kpiGrid">
+          <Kpi title={t.kpiProfit} value={money(profit)} />
+          <Kpi title={t.kpiMargin} value={fmtPct(margin)} />
 
-        <div className="card" style={{ padding: 12, background: "rgba(0,0,0,.18)" }}>
-          <div className="label">{lang === "it" ? "Insight" : "Insight"}</div>
-          <div>{insightText}</div>
+          <Kpi title={t.kpiBreakEvenAds} value={money(breakEvenCPA)} />
+          <Kpi title={t.kpiBreakEvenROAS} value={`${breakEvenROAS.toFixed(2)}x`} />
         </div>
 
-        <div className="hr" />
+        <div className="divider" />
 
-        <h4 style={{ margin: "0 0 10px" }}>{lang === "it" ? "Simulazione" : "Simulation"}</h4>
-        <div className="sliderRow">
-          <Slider label={lang === "it" ? `Costo ads +${adUpPct}%` : `Ad cost +${adUpPct}%`} value={adUpPct} setValue={setAdUpPct} min={0} max={30} />
-          <Slider label={lang === "it" ? `Sconto ${discountPct}%` : `Discount ${discountPct}%`} value={discountPct} setValue={setDiscountPct} min={0} max={30} />
-          <Slider label={lang === "it" ? `Resi +${returnsUp}pp` : `Returns +${returnsUp}pp`} value={returnsUp} setValue={setReturnsUp} min={0} max={10} />
+        <div className="cardTitle">{t.insightTitle}</div>
+        <div className="insightBox">{insightText}</div>
+
+        <div className="divider" />
+
+        <div className="cardTitle">{t.simulation}</div>
+        <div className="muted" style={{ marginTop: 6 }}>
+          {t.simHint}
         </div>
 
-        {!isPro && (
-          <div className="small" style={{ marginTop: 10, opacity: 0.9 }}>
-            Watermark in exports. Compare scenarios + PDF export in Pro.
-          </div>
-        )}
+        <SliderRow
+          label={t.simAdsUp}
+          value={state.adUpPct}
+          onChange={(v) => setField("adUpPct", v)}
+          suffix="%"
+        />
+        <SliderRow
+          label={t.simDiscount}
+          value={state.discountPct}
+          onChange={(v) => setField("discountPct", v)}
+          suffix="%"
+        />
+        <SliderRow
+          label={t.simReturnsUp}
+          value={state.returnsUp}
+          onChange={(v) => setField("returnsUp", v)}
+          suffix="%"
+        />
+
+        {!isPro && <div className="muted" style={{ marginTop: 10 }}>{t.lockedNote}</div>}
       </div>
     </div>
   );
 }
 
-function Field({ label, value, onChange, help }) {
+/* ---------- UI bits ---------- */
+
+function Field({ label, help, value, onChange }) {
   return (
-    <div>
-      <div className="label">{label}</div>
+    <div className="field">
+      <div className="fieldLabelRow">
+        <div className="fieldLabel">{label}</div>
+      </div>
+      {help ? <div className="fieldHelp">{help}</div> : null}
       <input className="input" value={value} onChange={(e) => onChange(e.target.value)} />
-      {help ? <div className="small">{help}</div> : null}
     </div>
   );
 }
 
-function Slider({ label, value, setValue, min, max }) {
+function Kpi({ title, value }) {
   return (
-    <div>
-      <div className="label">{label}</div>
-      <input className="range" type="range" min={min} max={max} value={value} onChange={(e) => setValue(Number(e.target.value))} />
+    <div className="kpi">
+      <div className="kpiTitle">{title}</div>
+      <div className="kpiValue">{value}</div>
+    </div>
+  );
+}
+
+function SliderRow({ label, value, onChange, suffix }) {
+  return (
+    <div className="sliderRow">
+      <div className="sliderTop">
+        <div className="sliderLabel">{label}</div>
+        <div className="sliderVal">
+          {value}
+          {suffix}
+        </div>
+      </div>
+      <input
+        className="slider"
+        type="range"
+        min="0"
+        max="50"
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
     </div>
   );
 }
