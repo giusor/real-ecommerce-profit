@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { compute } from "@/lib/calc";
 
 /* ---------------- helpers ---------------- */
@@ -65,25 +65,18 @@ function defaultState(lang) {
 export default function Calculator({ lang, isPro, setWantsPro }) {
   const t = useMemo(() => {
     const it = {
-      // quick guide
-      quickTitle: "Come usarlo (3 step)",
-      quick1: "1) Inserisci prezzo e costi (prodotto, spedizione, commissioni, resi).",
-      quick2: "2) Inserisci la pubblicità: rendimento (x) oppure costo per ordine.",
-      quick3: "3) Leggi profitto, margine e punto di pareggio. Poi prova le simulazioni.",
-
       input: "Input",
       results: "Risultati",
       simulation: "Simulazione",
       unlock: "Sblocca Pro",
       resetSim: "Reset simulazione",
 
-      // labels
       sellPrice: "Prezzo di vendita",
       sellPriceHelp: "Quanto paga il cliente per il prodotto.",
       sellPricePh: "es. 49,00",
 
       productCost: "Costo prodotto per ordine",
-      productCostHelp: "Quanto ti costa la merce (medio per ordine).",
+      productCostHelp: "Costo merce medio per ordine.",
       productCostPh: "es. 18,00",
 
       shippingYou: "Spedizione (costo tuo)",
@@ -92,7 +85,7 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
 
       shippingCustomer: "Spedizione pagata dal cliente",
       shippingCustomerHelp: "Metti 0 se fai spedizione gratuita.",
-      shippingCustomerPh: "es. 4,90 (oppure 0)",
+      shippingCustomerPh: "es. 4,90 (o 0)",
 
       packaging: "Packaging",
       packagingHelp: "Scatola, materiali, etichette.",
@@ -124,16 +117,14 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
       roasPh: "es. 2,5",
 
       cpaLabel: "Costo pubblicità per ordine",
-      cpaHelp: "Quanto spendi in ads per ottenere un ordine (medio).",
+      cpaHelp: "Quanto spendi in ads per ottenere un ordine.",
       cpaPh: "es. 20,00",
 
-      // KPIs
       kpiProfit: "Profitto netto per ordine",
       kpiMargin: "Margine netto",
       kpiBreakEvenAds: "Spesa ads massima per non andare in perdita",
       kpiBreakEvenROAS: "Rendimento ads minimo per non andare in perdita",
 
-      // insight + status
       insightTitle: "Interpretazione",
       insightGood:
         "Ottimo: hai margine. Puoi sostenere ads più care o piccoli sconti senza andare in perdita.",
@@ -146,7 +137,6 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
       statusOk: "Margine stretto",
       statusProfit: "Profittevole",
 
-      // sim
       simAdsUp: "Ads più care",
       simDiscount: "Sconto",
       simReturnsUp: "Resi in aumento",
@@ -161,11 +151,6 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
     };
 
     const en = {
-      quickTitle: "How to use (3 steps)",
-      quick1: "1) Enter price and costs (product, shipping, fees, returns).",
-      quick2: "2) Enter advertising: return (x) or cost per order.",
-      quick3: "3) Read profit, margin and break-even. Then try simulations.",
-
       input: "Inputs",
       results: "Results",
       simulation: "Simulation",
@@ -177,7 +162,7 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
       sellPricePh: "e.g. 49.00",
 
       productCost: "Product cost per order",
-      productCostHelp: "Your average product cost per order.",
+      productCostHelp: "Average product cost per order.",
       productCostPh: "e.g. 18.00",
 
       shippingYou: "Shipping (your cost)",
@@ -255,10 +240,9 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
   }, [lang]);
 
   const [state, setState] = useState(() => defaultState(lang));
-
   const currencySymbol = t.currencySymbol;
 
-  // Build base inputs for compute()
+  // Base inputs
   const baseInputs = useMemo(() => {
     const price = toNumber(state.price);
     const cogs = toNumber(state.productCost);
@@ -270,7 +254,6 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
     const platformFeePct = toNumber(state.platformFeePct) / 100;
     const returnsPct = toNumber(state.returnsPct) / 100;
 
-    // Ads
     let adCost = 0;
     if (state.adsMode === "roas") {
       const roas = Math.max(0.0001, toNumber(state.roas));
@@ -294,7 +277,7 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
     };
   }, [state]);
 
-  // Apply simulations
+  // Simulated inputs
   const simInputs = useMemo(() => {
     const adUp = state.adUpPct / 100;
     const discount = state.discountPct / 100;
@@ -304,12 +287,7 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
     const adCost = baseInputs.adCost * (1 + adUp);
     const returnsPct = Math.min(0.99, baseInputs.returnsPct + returnsUp);
 
-    return {
-      ...baseInputs,
-      price: priceAfterDiscount,
-      adCost,
-      returnsPct,
-    };
+    return { ...baseInputs, price: priceAfterDiscount, adCost, returnsPct };
   }, [baseInputs, state.adUpPct, state.discountPct, state.returnsUp]);
 
   const out = useMemo(() => compute(simInputs), [simInputs]);
@@ -341,7 +319,7 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
     setState((prev) => ({ ...prev, adUpPct: 0, discountPct: 0, returnsUp: 0 }));
   }
 
-  // Soft validation (only on required numeric fields)
+  // Soft validation (non-invasive)
   const requiredKeys = [
     "price",
     "productCost",
@@ -357,9 +335,7 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
 
   const invalid = useMemo(() => {
     const map = {};
-    for (const k of requiredKeys) {
-      map[k] = !isNumLike(state[k]);
-    }
+    for (const k of requiredKeys) map[k] = !isNumLike(state[k]);
     return map;
   }, [state, requiredKeys]);
 
@@ -368,14 +344,6 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
       {/* LEFT */}
       <div className="card">
         <div className="cardTitle">{t.input}</div>
-
-        {/* Quick guide */}
-        <div className="miniGuide" style={{ marginTop: 10 }}>
-          <div className="miniGuideTitle">{t.quickTitle}</div>
-          <div className="miniGuideRow">{t.quick1}</div>
-          <div className="miniGuideRow">{t.quick2}</div>
-          <div className="miniGuideRow">{t.quick3}</div>
-        </div>
 
         <div className="fieldGrid" style={{ marginTop: 12 }}>
           <Field
@@ -543,7 +511,6 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
         <div className="kpiGrid">
           <Kpi title={t.kpiProfit} value={money(profit)} />
           <Kpi title={t.kpiMargin} value={fmtPct(margin)} />
-
           <Kpi title={t.kpiBreakEvenAds} value={money(breakEvenCPA)} />
           <Kpi title={t.kpiBreakEvenROAS} value={`${breakEvenROAS.toFixed(2)}x`} />
         </div>
@@ -588,19 +555,26 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
 /* ---------------- UI bits ---------------- */
 
 function Field({ label, help, placeholder, value, onChange, invalid, invalidText }) {
+  const [focused, setFocused] = useState(false);
+
   return (
     <div className={`field ${invalid ? "fieldInvalid" : ""}`}>
-      <div className="fieldLabelRow">
-        <div className="fieldLabel">{label}</div>
-      </div>
-      {help ? <div className="fieldHelp">{help}</div> : null}
+      <div className="fieldLabel">{label}</div>
+
+      {/* Help text: ONLY when focused (reduces clutter) */}
+      {help && focused ? <div className="fieldHelp">{help}</div> : null}
+
       <input
         className="input"
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
       />
-      {invalid ? <div className="fieldError">{invalidText}</div> : null}
+
+      {/* Keep validation subtle */}
+      {invalid && focused ? <div className="fieldError">{invalidText}</div> : null}
     </div>
   );
 }
