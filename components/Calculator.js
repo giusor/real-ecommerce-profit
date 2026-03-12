@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { compute } from "@/lib/calc";
 
-const LS_KEY = "pro_unlocked";
+/* ---------------- helpers ---------------- */
 
 function isNumLike(s) {
   if (s === "" || s === null || s === undefined) return false;
@@ -20,8 +20,6 @@ function fmtMoney(n, symbol) {
   const v = Number(n || 0);
   const abs = Math.abs(v);
   const sign = v < 0 ? "-" : "";
-  // format: 1,234.56 in EN / 1.234,56 in IT handled by locale outside if needed
-  // We keep simple formatting + replace later if IT.
   const s = abs.toFixed(2);
   const parts = s.split(".");
   const int = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -35,22 +33,18 @@ function fmtPct(n) {
 }
 
 function normalizeMoneyStringForLang(str, lang) {
-  // Convert "$1,234.56" -> "€1.234,56" style later; symbol set elsewhere.
   if (lang !== "it") return str;
-  // swap thousand/decimal separators (simple approach)
   // 1,234.56 => 1.234,56
   return str.replace(/(\d),(?=\d{3}\b)/g, "$1.").replace(/\.(\d{2})\b/g, ",$1");
 }
 
 function defaultState(lang) {
-  // Defaults shown as strings (user-friendly)
-  // IT uses comma; EN uses dot
   const dot = lang === "it" ? "," : ".";
   return {
     price: `49${dot}00`,
-    cogs: `18${dot}00`,
-    shipCost: `6${dot}50`,
-    shipCharged: `4${dot}90`,
+    productCost: `18${dot}00`,
+    shippingCost: `6${dot}50`,
+    shippingCharged: `4${dot}90`,
     packaging: `0${dot}80`,
     payFeePct: `2${dot}9`,
     payFeeFixed: `0${dot}30`,
@@ -59,141 +53,202 @@ function defaultState(lang) {
     adsMode: "roas", // "roas" | "cpa"
     roas: `2${dot}5`,
     cpa: `20${dot}00`,
-    // Pro sims
+    // Sim
     adUpPct: 0,
     discountPct: 0,
     returnsUp: 0,
   };
 }
 
+/* ---------------- component ---------------- */
+
 export default function Calculator({ lang, isPro, setWantsPro }) {
   const t = useMemo(() => {
     const it = {
+      // quick guide
+      quickTitle: "Come usarlo (3 step)",
+      quick1: "1) Inserisci prezzo e costi (prodotto, spedizione, commissioni, resi).",
+      quick2: "2) Inserisci la pubblicità: rendimento (x) oppure costo per ordine.",
+      quick3: "3) Leggi profitto, margine e punto di pareggio. Poi prova le simulazioni.",
+
       input: "Input",
       results: "Risultati",
       simulation: "Simulazione",
-      lockedNote: "Disponibile in Pro: confronto scenari + export PDF senza watermark.",
       unlock: "Sblocca Pro",
       resetSim: "Reset simulazione",
-      // Friendly labels (no acronyms)
+
+      // labels
       sellPrice: "Prezzo di vendita",
-      sellPriceHelp: "Prezzo pagato dal cliente (IVA inclusa se la usi così).",
+      sellPriceHelp: "Quanto paga il cliente per il prodotto.",
+      sellPricePh: "es. 49,00",
+
       productCost: "Costo prodotto per ordine",
-      productCostHelp: "Costo merce (quanto ti costa produrre/acquistare l’ordine).",
+      productCostHelp: "Quanto ti costa la merce (medio per ordine).",
+      productCostPh: "es. 18,00",
+
       shippingYou: "Spedizione (costo tuo)",
-      shippingYouHelp: "Quanto paghi tu al corriere per spedire.",
+      shippingYouHelp: "Quanto paghi tu al corriere.",
+      shippingYouPh: "es. 6,50",
+
       shippingCustomer: "Spedizione pagata dal cliente",
-      shippingCustomerHelp: "Quanto incassi dal cliente per la spedizione (0 se gratuita).",
+      shippingCustomerHelp: "Metti 0 se fai spedizione gratuita.",
+      shippingCustomerPh: "es. 4,90 (oppure 0)",
+
       packaging: "Packaging",
-      packagingHelp: "Scatola, materiale imballo, etichette.",
+      packagingHelp: "Scatola, materiali, etichette.",
+      packagingPh: "es. 0,80",
+
       payFeesPct: "Commissione pagamento (%)",
-      payFeesPctHelp: "Es. Stripe/PayPal percentuale.",
+      payFeesPctHelp: "Percentuale (Stripe/PayPal ecc.).",
+      payFeesPctPh: "es. 2,9",
+
       payFeesFixed: "Commissione pagamento fissa",
-      payFeesFixedHelp: "Es. 0,30€ per transazione.",
+      payFeesFixedHelp: "Costo fisso per transazione.",
+      payFeesFixedPh: "es. 0,30",
+
       platformFeePct: "Commissione piattaforma (%)",
-      platformFeePctHelp: "Es. fee marketplace o app/checkout (se applicabile).",
+      platformFeePctHelp: "Solo se applicabile (marketplace/app).",
+      platformFeePctPh: "es. 0",
+
       returnsPct: "Resi (%)",
-      returnsPctHelp: "Quota ordini che rimborsi (in media).",
+      returnsPctHelp: "Quota media di ordini rimborsati.",
+      returnsPctPh: "es. 8",
 
       adsTitle: "Pubblicità",
-      adsModeLabel: "Come misuri la pubblicità?",
+      adsModeLabel: "Come inserisci la pubblicità?",
       adsModeROAS: "Rendimento (ricavi / spesa)",
-      adsModeCPA: "Costo per acquisto",
+      adsModeCPA: "Costo per ordine",
+
       roasLabel: "Rendimento pubblicità (x)",
-      roasHelp: "Esempio: 2,5 significa 2,5€ di ricavi per 1€ speso.",
+      roasHelp: "Esempio: 2,5 = 2,5€ di ricavi per 1€ speso.",
+      roasPh: "es. 2,5",
+
       cpaLabel: "Costo pubblicità per ordine",
-      cpaHelp: "Quanto ti costa ottenere un ordine (in media).",
+      cpaHelp: "Quanto spendi in ads per ottenere un ordine (medio).",
+      cpaPh: "es. 20,00",
 
-      kpiProfit: "Profitto netto / ordine",
+      // KPIs
+      kpiProfit: "Profitto netto per ordine",
       kpiMargin: "Margine netto",
-      kpiBreakEvenAds: "Ads a pareggio per ordine",
-      kpiBreakEvenROAS: "Rendimento ads di pareggio",
+      kpiBreakEvenAds: "Spesa ads massima per non andare in perdita",
+      kpiBreakEvenROAS: "Rendimento ads minimo per non andare in perdita",
 
+      // insight + status
       insightTitle: "Interpretazione",
-      // Insight buckets (user-friendly)
       insightGood:
-        "Ottimo: hai margine. Puoi reinvestire in ads o sconti senza andare in perdita.",
+        "Ottimo: hai margine. Puoi sostenere ads più care o piccoli sconti senza andare in perdita.",
       insightOk:
-        "Sei in equilibrio: piccoli cambiamenti (ads, resi, sconti) possono spostare il profitto.",
+        "Margine stretto: piccoli cambiamenti (ads, resi, sconti) possono ribaltare il risultato.",
       insightBad:
-        "Sei in perdita: prima di scalare, rivedi prezzo, costi, resi o spesa ads.",
+        "Sei in perdita: rivedi prezzo, costi, resi o spesa ads prima di scalare.",
 
       statusLoss: "In perdita",
-      statusOk: "In equilibrio",
+      statusOk: "Margine stretto",
       statusProfit: "Profittevole",
 
+      // sim
       simAdsUp: "Ads più care",
       simDiscount: "Sconto",
       simReturnsUp: "Resi in aumento",
       simHint:
-        "Muovi i cursori per vedere l’impatto sui risultati. In Pro puoi confrontare scenari A vs B.",
+        "Muovi i cursori per vedere l’impatto. In Pro puoi confrontare due scenari.",
 
+      lockedNote: "In Pro: confronto scenari + export PDF pulito (senza watermark).",
       disclaimer: "Nota: stime operative. Non è consulenza fiscale/finanziaria.",
-
       currencySymbol: "€",
+
+      requiredHint: "Inserisci un numero valido",
     };
 
     const en = {
+      quickTitle: "How to use (3 steps)",
+      quick1: "1) Enter price and costs (product, shipping, fees, returns).",
+      quick2: "2) Enter advertising: return (x) or cost per order.",
+      quick3: "3) Read profit, margin and break-even. Then try simulations.",
+
       input: "Inputs",
       results: "Results",
       simulation: "Simulation",
-      lockedNote: "Available in Pro: scenario comparison + clean PDF export (no watermark).",
       unlock: "Unlock Pro",
       resetSim: "Reset simulation",
 
       sellPrice: "Selling price",
-      sellPriceHelp: "What the customer pays (include taxes if that’s how you track it).",
+      sellPriceHelp: "What the customer pays for the product.",
+      sellPricePh: "e.g. 49.00",
+
       productCost: "Product cost per order",
-      productCostHelp: "Your product cost (COGS) per order.",
+      productCostHelp: "Your average product cost per order.",
+      productCostPh: "e.g. 18.00",
+
       shippingYou: "Shipping (your cost)",
       shippingYouHelp: "What you pay the carrier.",
+      shippingYouPh: "e.g. 6.50",
+
       shippingCustomer: "Shipping charged to customer",
-      shippingCustomerHelp: "What you collect from the customer (0 if free shipping).",
+      shippingCustomerHelp: "Use 0 if you offer free shipping.",
+      shippingCustomerPh: "e.g. 4.90 (or 0)",
+
       packaging: "Packaging",
       packagingHelp: "Box, labels, materials.",
+      packagingPh: "e.g. 0.80",
+
       payFeesPct: "Payment fee (%)",
-      payFeesPctHelp: "e.g., Stripe/PayPal percentage fee.",
+      payFeesPctHelp: "Percentage fee (Stripe/PayPal etc.).",
+      payFeesPctPh: "e.g. 2.9",
+
       payFeesFixed: "Payment fixed fee",
-      payFeesFixedHelp: "e.g., $0.30 per transaction.",
+      payFeesFixedHelp: "Fixed fee per transaction.",
+      payFeesFixedPh: "e.g. 0.30",
+
       platformFeePct: "Platform fee (%)",
-      platformFeePctHelp: "Marketplace/app/platform fee if applicable.",
+      platformFeePctHelp: "Only if applicable (marketplace/app).",
+      platformFeePctPh: "e.g. 0",
+
       returnsPct: "Returns (%)",
       returnsPctHelp: "Average share of orders refunded.",
+      returnsPctPh: "e.g. 8",
 
       adsTitle: "Advertising",
-      adsModeLabel: "How do you track ads?",
+      adsModeLabel: "How do you enter advertising?",
       adsModeROAS: "Return (revenue / spend)",
-      adsModeCPA: "Cost per purchase",
-      roasLabel: "Ad return (x)",
-      roasHelp: "Example: 2.5 means $2.5 revenue per $1 spent.",
-      cpaLabel: "Ad cost per order",
-      cpaHelp: "Average cost to get one order.",
+      adsModeCPA: "Cost per order",
 
-      kpiProfit: "Net profit / order",
+      roasLabel: "Ad return (x)",
+      roasHelp: "Example: 2.5 = $2.5 revenue per $1 spent.",
+      roasPh: "e.g. 2.5",
+
+      cpaLabel: "Ad cost per order",
+      cpaHelp: "Average ad spend to get one order.",
+      cpaPh: "e.g. 20.00",
+
+      kpiProfit: "Net profit per order",
       kpiMargin: "Net margin",
-      kpiBreakEvenAds: "Break-even ad spend / order",
-      kpiBreakEvenROAS: "Break-even ad return",
+      kpiBreakEvenAds: "Max ad spend to avoid losing money",
+      kpiBreakEvenROAS: "Min ad return to avoid losing money",
 
       insightTitle: "Insight",
       insightGood:
-        "Great: you have margin. You can reinvest in ads or discounts without going negative.",
+        "Great: you have margin. You can handle higher ad costs or small discounts without going negative.",
       insightOk:
-        "Tight: small changes (ads, returns, discounts) can flip profitability.",
+        "Tight: small changes (ads, returns, discounts) can flip the result.",
       insightBad:
-        "You’re losing money: before scaling, revisit price, costs, returns, or ad spend.",
+        "You’re losing money: revisit price, costs, returns, or ad spend before scaling.",
 
       statusLoss: "Losing money",
-      statusOk: "Tight",
+      statusOk: "Tight margin",
       statusProfit: "Profitable",
 
       simAdsUp: "Higher ad costs",
       simDiscount: "Discount",
       simReturnsUp: "More returns",
       simHint:
-        "Move sliders to see the impact. In Pro you can compare Scenario A vs B.",
+        "Move sliders to see the impact. In Pro you can compare two scenarios.",
 
+      lockedNote: "In Pro: scenario comparison + clean PDF export (no watermark).",
       disclaimer: "Disclaimer: estimates only. Not financial/tax advice.",
       currencySymbol: "$",
+
+      requiredHint: "Enter a valid number",
     };
 
     return lang === "it" ? it : en;
@@ -201,23 +256,14 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
 
   const [state, setState] = useState(() => defaultState(lang));
 
-  // If language changes, update defaults only if user hasn't edited fields yet
-  useEffect(() => {
-    setState((prev) => {
-      // naive: keep user values, only adjust formatting for decimals in the two main fields if empty
-      // We'll keep it simple and not overwrite user.
-      return prev;
-    });
-  }, [lang]);
-
   const currencySymbol = t.currencySymbol;
 
-  // Build inputs for compute()
+  // Build base inputs for compute()
   const baseInputs = useMemo(() => {
     const price = toNumber(state.price);
-    const cogs = toNumber(state.cogs);
-    const shipCost = toNumber(state.shipCost);
-    const shipCharged = toNumber(state.shipCharged);
+    const cogs = toNumber(state.productCost);
+    const shipCost = toNumber(state.shippingCost);
+    const shipCharged = toNumber(state.shippingCharged);
     const packaging = toNumber(state.packaging);
     const payFeePct = toNumber(state.payFeePct) / 100;
     const payFeeFixed = toNumber(state.payFeeFixed);
@@ -228,7 +274,6 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
     let adCost = 0;
     if (state.adsMode === "roas") {
       const roas = Math.max(0.0001, toNumber(state.roas));
-      // adCost = revenue/roas; revenue here is selling price + shipping charged
       const revenue = price + shipCharged;
       adCost = revenue / roas;
     } else {
@@ -249,21 +294,19 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
     };
   }, [state]);
 
-  // Apply simulations (adUpPct, discountPct, returnsUp)
+  // Apply simulations
   const simInputs = useMemo(() => {
     const adUp = state.adUpPct / 100;
     const discount = state.discountPct / 100;
     const returnsUp = state.returnsUp / 100;
 
     const priceAfterDiscount = baseInputs.price * (1 - discount);
-    const shipCharged = baseInputs.shipCharged; // keep same
     const adCost = baseInputs.adCost * (1 + adUp);
     const returnsPct = Math.min(0.99, baseInputs.returnsPct + returnsUp);
 
     return {
       ...baseInputs,
       price: priceAfterDiscount,
-      shipCharged,
       adCost,
       returnsPct,
     };
@@ -288,6 +331,8 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
   const insightText =
     status === "profit" ? t.insightGood : status === "ok" ? t.insightOk : t.insightBad;
 
+  const money = (n) => normalizeMoneyStringForLang(fmtMoney(n, currencySymbol), lang);
+
   function setField(key, val) {
     setState((prev) => ({ ...prev, [key]: val }));
   }
@@ -296,71 +341,126 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
     setState((prev) => ({ ...prev, adUpPct: 0, discountPct: 0, returnsUp: 0 }));
   }
 
-  const money = (n) => normalizeMoneyStringForLang(fmtMoney(n, currencySymbol), lang);
+  // Soft validation (only on required numeric fields)
+  const requiredKeys = [
+    "price",
+    "productCost",
+    "shippingCost",
+    "shippingCharged",
+    "packaging",
+    "payFeePct",
+    "payFeeFixed",
+    "platformFeePct",
+    "returnsPct",
+    state.adsMode === "roas" ? "roas" : "cpa",
+  ];
+
+  const invalid = useMemo(() => {
+    const map = {};
+    for (const k of requiredKeys) {
+      map[k] = !isNumLike(state[k]);
+    }
+    return map;
+  }, [state, requiredKeys]);
 
   return (
     <div className="grid2">
-      {/* LEFT: INPUT */}
+      {/* LEFT */}
       <div className="card">
         <div className="cardTitle">{t.input}</div>
 
-        <div className="fieldGrid">
+        {/* Quick guide */}
+        <div className="miniGuide" style={{ marginTop: 10 }}>
+          <div className="miniGuideTitle">{t.quickTitle}</div>
+          <div className="miniGuideRow">{t.quick1}</div>
+          <div className="miniGuideRow">{t.quick2}</div>
+          <div className="miniGuideRow">{t.quick3}</div>
+        </div>
+
+        <div className="fieldGrid" style={{ marginTop: 12 }}>
           <Field
             label={t.sellPrice}
             help={t.sellPriceHelp}
+            placeholder={t.sellPricePh}
             value={state.price}
+            invalid={invalid.price}
+            invalidText={t.requiredHint}
             onChange={(v) => setField("price", v)}
           />
           <Field
             label={t.productCost}
             help={t.productCostHelp}
-            value={state.cogs}
-            onChange={(v) => setField("cogs", v)}
+            placeholder={t.productCostPh}
+            value={state.productCost}
+            invalid={invalid.productCost}
+            invalidText={t.requiredHint}
+            onChange={(v) => setField("productCost", v)}
           />
 
           <Field
             label={t.shippingYou}
             help={t.shippingYouHelp}
-            value={state.shipCost}
-            onChange={(v) => setField("shipCost", v)}
+            placeholder={t.shippingYouPh}
+            value={state.shippingCost}
+            invalid={invalid.shippingCost}
+            invalidText={t.requiredHint}
+            onChange={(v) => setField("shippingCost", v)}
           />
           <Field
             label={t.packaging}
             help={t.packagingHelp}
+            placeholder={t.packagingPh}
             value={state.packaging}
+            invalid={invalid.packaging}
+            invalidText={t.requiredHint}
             onChange={(v) => setField("packaging", v)}
           />
 
           <Field
             label={t.shippingCustomer}
             help={t.shippingCustomerHelp}
-            value={state.shipCharged}
-            onChange={(v) => setField("shipCharged", v)}
+            placeholder={t.shippingCustomerPh}
+            value={state.shippingCharged}
+            invalid={invalid.shippingCharged}
+            invalidText={t.requiredHint}
+            onChange={(v) => setField("shippingCharged", v)}
           />
           <Field
             label={t.payFeesPct}
             help={t.payFeesPctHelp}
+            placeholder={t.payFeesPctPh}
             value={state.payFeePct}
+            invalid={invalid.payFeePct}
+            invalidText={t.requiredHint}
             onChange={(v) => setField("payFeePct", v)}
           />
 
           <Field
             label={t.payFeesFixed}
             help={t.payFeesFixedHelp}
+            placeholder={t.payFeesFixedPh}
             value={state.payFeeFixed}
+            invalid={invalid.payFeeFixed}
+            invalidText={t.requiredHint}
             onChange={(v) => setField("payFeeFixed", v)}
           />
           <Field
             label={t.platformFeePct}
             help={t.platformFeePctHelp}
+            placeholder={t.platformFeePctPh}
             value={state.platformFeePct}
+            invalid={invalid.platformFeePct}
+            invalidText={t.requiredHint}
             onChange={(v) => setField("platformFeePct", v)}
           />
 
           <Field
             label={t.returnsPct}
             help={t.returnsPctHelp}
+            placeholder={t.returnsPctPh}
             value={state.returnsPct}
+            invalid={invalid.returnsPct}
+            invalidText={t.requiredHint}
             onChange={(v) => setField("returnsPct", v)}
           />
         </div>
@@ -395,14 +495,20 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
           <Field
             label={t.roasLabel}
             help={t.roasHelp}
+            placeholder={t.roasPh}
             value={state.roas}
+            invalid={invalid.roas}
+            invalidText={t.requiredHint}
             onChange={(v) => setField("roas", v)}
           />
         ) : (
           <Field
             label={t.cpaLabel}
             help={t.cpaHelp}
+            placeholder={t.cpaPh}
             value={state.cpa}
+            invalid={invalid.cpa}
+            invalidText={t.requiredHint}
             onChange={(v) => setField("cpa", v)}
           />
         )}
@@ -424,7 +530,7 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
         </div>
       </div>
 
-      {/* RIGHT: RESULTS */}
+      {/* RIGHT */}
       <div className="card">
         <div className="cardTopRow">
           <div className="cardTitle">{t.results}</div>
@@ -479,16 +585,22 @@ export default function Calculator({ lang, isPro, setWantsPro }) {
   );
 }
 
-/* ---------- UI bits ---------- */
+/* ---------------- UI bits ---------------- */
 
-function Field({ label, help, value, onChange }) {
+function Field({ label, help, placeholder, value, onChange, invalid, invalidText }) {
   return (
-    <div className="field">
+    <div className={`field ${invalid ? "fieldInvalid" : ""}`}>
       <div className="fieldLabelRow">
         <div className="fieldLabel">{label}</div>
       </div>
       {help ? <div className="fieldHelp">{help}</div> : null}
-      <input className="input" value={value} onChange={(e) => onChange(e.target.value)} />
+      <input
+        className="input"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {invalid ? <div className="fieldError">{invalidText}</div> : null}
     </div>
   );
 }
