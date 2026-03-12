@@ -11,6 +11,7 @@
 }
 
 * { box-sizing: border-box; }
+
 body {
   margin: 0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
@@ -22,6 +23,8 @@ body {
 
 .shell { max-width: 1100px; margin: 0 auto; padding: 24px; }
 
+/* ---------- Header ---------- */
+
 .header {
   position: sticky; top: 0;
   backdrop-filter: blur(10px);
@@ -29,14 +32,30 @@ body {
   border-bottom: 1px solid var(--line);
   padding: 14px 0;
   z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
-.header-inner { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+.headerRight { display: inline-flex; align-items: center; gap: 10px; }
+
 .brand { display: flex; flex-direction: column; line-height: 1.05; }
-.brand b { font-size: 14px; letter-spacing: .2px; }
-.brand span { font-size: 12px; color: var(--muted); }
+.brandTitle { font-size: 14px; letter-spacing: .2px; font-weight: 700; }
+.brandSub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+.hero { margin-top: 10px; }
+
+.h1 { font-size: 34px; margin: 20px 0 8px; letter-spacing: -0.4px; }
+.sub { color: var(--muted); margin: 0 0 18px; max-width: 70ch; }
+
+/* ---------- Layout ---------- */
 
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; }
 @media (max-width: 900px) { .row { grid-template-columns: 1fr; } }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 520px) { .grid2 { grid-template-columns: 1fr; } }
 
 .card {
   border: 1px solid var(--line);
@@ -46,13 +65,22 @@ body {
   box-shadow: 0 10px 40px rgba(0,0,0,.28);
 }
 
-.h1 { font-size: 34px; margin: 20px 0 8px; letter-spacing: -0.4px; }
-.sub { color: var(--muted); margin: 0 0 18px; max-width: 70ch; }
+/* ---------- Inputs ---------- */
 
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-@media (max-width: 520px) { .grid2 { grid-template-columns: 1fr; } }
+.fieldGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 10px;
+}
+@media (max-width: 720px) {
+  .fieldGrid { grid-template-columns: 1fr; }
+}
 
-.label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.field { display: flex; flex-direction: column; }
+.fieldLabel { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.fieldHelp { font-size: 12px; color: var(--muted); margin: -2px 0 8px; line-height: 1.35; opacity: .95; }
+
 .input, .select {
   width: 100%;
   padding: 10px 12px;
@@ -62,17 +90,28 @@ body {
   color: var(--text);
   outline: none;
 }
+
+.input::placeholder { color: rgba(156,163,175,.65); }
+
 .input:focus, .select:focus { border-color: rgba(96,165,250,.55); }
 
 .small { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.muted { color: var(--muted); }
 
-.kpi { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.kpi .box { padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: rgba(0,0,0,.18); }
-.kpi .box b { display: block; font-size: 18px; margin-top: 4px; }
-.kpi .box span { color: var(--muted); font-size: 12px; }
+.note { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
 
-.badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line); background: rgba(0,0,0,.2); font-size: 12px; }
-.dot { width: 8px; height: 8px; border-radius: 99px; display: inline-block; }
+/* Soft validation */
+.fieldInvalid .input {
+  border-color: rgba(245,158,11,.55);
+  box-shadow: 0 0 0 3px rgba(245,158,11,.10);
+}
+.fieldError {
+  font-size: 12px;
+  color: rgba(245,158,11,.95);
+  margin-top: 6px;
+}
+
+/* ---------- Buttons ---------- */
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -84,15 +123,22 @@ body {
   text-decoration: none;
   cursor: pointer;
 }
+
 .btn:hover { border-color: rgba(96,165,250,.55); }
 .btnPrimary { background: rgba(96,165,250,.28); }
+
 .btnRow { display: flex; gap: 10px; flex-wrap: wrap; }
 
-.hr { height: 1px; background: var(--line); margin: 16px 0; border: 0; }
+/* ---------- Divider ---------- */
 
-.sliderRow { display: grid; grid-template-columns: 1fr; gap: 10px; }
-.range { width: 100%; }
-.footer { color: var(--muted); font-size: 12px; margin-top: 28px; line-height: 1.6; }
+.divider, .hr {
+  height: 1px;
+  background: var(--line);
+  margin: 16px 0;
+  border: 0;
+}
+
+/* ---------- Toggle ---------- */
 
 .toggle {
   display: inline-flex; gap: 6px; padding: 4px;
@@ -100,6 +146,7 @@ body {
   border-radius: 999px;
   background: rgba(0,0,0,.18);
 }
+
 .pill {
   padding: 6px 10px;
   border-radius: 999px;
@@ -109,3 +156,130 @@ body {
   user-select: none;
 }
 .pillOn { background: rgba(96,165,250,.25); color: var(--text); }
+
+/* ---------- Segmented (Ads mode) ---------- */
+
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.segBtn {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(0,0,0,.18);
+  color: var(--muted);
+  cursor: pointer;
+}
+.segBtn:hover { border-color: rgba(96,165,250,.55); color: var(--text); }
+.segOn { background: rgba(96,165,250,.22); color: var(--text); }
+
+/* ---------- Results ---------- */
+
+.cardTitle { font-weight: 700; letter-spacing: .2px; }
+.cardTopRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pillTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(0,0,0,.2);
+  font-size: 12px;
+  color: var(--text);
+}
+.dot { width: 8px; height: 8px; border-radius: 99px; display: inline-block; background: var(--muted); }
+
+.pillTag.loss .dot { background: var(--red); }
+.pillTag.ok .dot { background: var(--yellow); }
+.pillTag.profit .dot { background: var(--green); }
+
+.kpiGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+@media (max-width: 520px) {
+  .kpiGrid { grid-template-columns: 1fr; }
+}
+
+.kpi {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(0,0,0,.18);
+}
+
+.kpiTitle { color: var(--muted); font-size: 12px; }
+.kpiValue { display: block; font-size: 18px; margin-top: 6px; font-weight: 800; letter-spacing: -0.2px; }
+
+/* Insight */
+.insightBox {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(0,0,0,.18);
+  line-height: 1.5;
+}
+
+/* ---------- Sliders ---------- */
+
+.sliderRow { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 12px; }
+.sliderTop { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sliderLabel { color: var(--muted); font-size: 12px; }
+.sliderVal { font-size: 12px; color: var(--text); }
+
+.slider {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+/* ---------- Mini guide ---------- */
+
+.miniGuide {
+  border: 1px solid var(--line);
+  background: rgba(0,0,0,.14);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.miniGuideTitle {
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  margin-bottom: 8px;
+}
+
+.miniGuideRow {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin-top: 4px;
+}
+
+/* ---------- Footer ---------- */
+
+.footer { color: var(--muted); font-size: 12px; margin-top: 28px; line-height: 1.6; }
+
+/* ---------- Legacy (kept for compatibility if old classes exist) ---------- */
+
+.label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+
+.kpiLegacy { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.kpiLegacy .box { padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: rgba(0,0,0,.18); }
+.kpiLegacy .box b { display: block; font-size: 18px; margin-top: 4px; }
+.kpiLegacy .box span { color: var(--muted); font-size: 12px; }
+
+.badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line); background: rgba(0,0,0,.2); font-size: 12px; }
+.range { width: 100%; }
